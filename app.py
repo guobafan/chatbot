@@ -82,13 +82,15 @@ with st.sidebar:
         options=list(PROVIDERS),
         key='provider',
         on_change=apply_provider,
-        help='选好服务商会自动填 BASE_URL 和模型名，你只需要贴自己的 Key',
+        help='选服务商会自动填 BASE_URL 和模型名；要手动改就选「自定义」',
     )
-    st.text_input('BASE_URL', key='base_url', placeholder='https://xxx/v1')
+    is_custom = st.session_state.provider == '自定义'
+    st.text_input('BASE_URL', key='base_url', placeholder='https://xxx/v1', disabled=not is_custom)
     st.text_input('API_KEY（你自己的）', key='api_key', type='password', placeholder='sk-... / ms-...')
+    st.caption('Key 要和上面的服务商对应：魔搭的以 `ms-` 开头，DeepSeek 的以 `sk-` 开头。')
     if not st.session_state.api_key:
         st.caption('⚠️ 没填 Key：三个功能都点不动。Key 只存在当前浏览器会话，不上传、不落盘。')
-    st.text_input('MODEL_NAME', key='model_name', placeholder='模型名')
+    st.text_input('MODEL_NAME', key='model_name', placeholder='模型名', disabled=not is_custom)
     st.divider()
     # 下拉选择框
     st.session_state.persona = st.selectbox('选择人设', options=PERSONA_KEYS, index=PERSONA_KEYS.index(st.session_state.persona))
@@ -150,7 +152,10 @@ with tabs[0]: # 智能聊天
         # 输入聊天问题
         message = ''
         if client is None:
-            st.caption('（填上 API Key 后这里才会出现输入框）')
+            if not st.session_state.base_url:
+                st.caption('（先选一个服务商，或选「自定义」把 BASE_URL 填好）')
+            else:
+                st.caption('（填上 API Key 后这里才会出现输入框）')
         elif st.session_state.tab == '💬智能聊天':
             with st.bottom:
                 message = st.chat_input(placeholder='请输入您的问题，回车发送...')
