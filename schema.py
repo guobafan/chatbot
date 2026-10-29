@@ -1,7 +1,4 @@
-# 作者：小明
-# 项目：day21
-# 文件：schema.py
-# 时间：2026/10/26 10:55
+
 # pydantic 主要用于数据格式验证
 from pydantic import BaseModel, Field
 import json

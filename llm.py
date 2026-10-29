@@ -1,7 +1,4 @@
-# 作者：小明
-# 项目：day20
-# 文件：llm.py
-# 时间：2026/10/23 10:26
+
 import os
 
 from dotenv import load_dotenv

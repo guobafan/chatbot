@@ -1,7 +1,4 @@
-# 作者：小明
-# 项目：day20
-# 文件：truncation.py
-# 时间：2026/10/23 16:23
+
 from typing import List, Dict
 
 # 截断策略

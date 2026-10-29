@@ -1,11 +1,8 @@
-# 作者：小明
-# 项目：day20
-# 文件：app.py
-# 时间：2026/10/23 09:16
+
 import os
 
 import streamlit as st
-from llm import completion, stream, create_client, default_client, default_model
+from llm import completion, stream, create_client
 from adapter import StreamlitAdapter
 from prompts import PERSONA, build_intent_messages, INTENT_DEMOS
 from truncation import TRUNC_OPTIONS, build_messages
@@ -28,6 +25,21 @@ TRUNC_KEYS = list(TRUNC_OPTIONS.keys())
 # 不同意图识别后显示的颜色
 INTENT_COLORS = {'order': 'green', 'return': 'red', 'complain': 'blue'}
 
+# 常用服务商：选一个会自动填好 BASE_URL 和模型名，访客只需要贴自己的 Key
+PROVIDERS = {
+    '魔搭 ModelScope（每天 2000 次免费）': ('https://api-inference.modelscope.cn/v1', 'deepseek-ai/DeepSeek-V4-Pro'),
+    '阿里百炼 DashScope': ('https://dashscope.aliyuncs.com/compatible-mode/v1', 'deepseek-v4-flash-0731'),
+    'DeepSeek 官方': ('https://api.deepseek.com/v1', 'deepseek-chat'),
+    '自定义': ('', ''),
+}
+
+
+def apply_provider():
+    """切换服务商时，把 BASE_URL 和模型名一起换掉（Key 不自动清空）。"""
+    base_url, model_name = PROVIDERS[st.session_state.provider]
+    st.session_state.base_url = base_url
+    st.session_state.model_name = model_name
+
 
 def init_state():
     """初始化 session_state 中保存的状态数据"""
@@ -42,9 +54,11 @@ def init_state():
         'keep': 10, # 窗口大小轮数
         'budget': 1024, # token预算阈值上限
         'tab': '💬智能聊天',
-        'base_url': _secret('BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1'),
-        'api_key': _secret('API_KEY', ''),
-        'model_name': _secret('MODEL_NAME', default_model),
+        'provider': list(PROVIDERS)[0],
+        'base_url': _secret('BASE_URL', PROVIDERS[list(PROVIDERS)[0]][0]),
+        # Key 永远从空开始：谁用谁填自己的，站点不提供公共额度
+        'api_key': '',
+        'model_name': _secret('MODEL_NAME', PROVIDERS[list(PROVIDERS)[0]][1]),
     }
     # 将各状态数据的初始值保存到 st.session_state 中。
     # session_state 可在一次会话的多次 rerun 情况下共享状态数据
@@ -61,13 +75,20 @@ st.set_page_config('智能聊天机器人', page_icon='🤖', initial_sidebar_st
 with st.sidebar:
     st.header('⚙️ 控制面板')
     st.markdown('**运行模式:** 🟢 真实大模型')
-    # st.text(f'模型名称: {model_name} | 协议: OpenAI兼容')
+    st.caption('本应用不自带额度：填你自己的 API Key 才能聊天。')
     st.divider()
-    st.session_state.base_url = st.text_input('BASE_URL', placeholder='请填写BASE_URL', value=st.session_state.base_url)
-    st.session_state.api_key = st.text_input('API_KEY', placeholder='请填写API_KEY', type='password', value=st.session_state.api_key)
+    st.selectbox(
+        '服务商',
+        options=list(PROVIDERS),
+        key='provider',
+        on_change=apply_provider,
+        help='选好服务商会自动填 BASE_URL 和模型名，你只需要贴自己的 Key',
+    )
+    st.text_input('BASE_URL', key='base_url', placeholder='https://xxx/v1')
+    st.text_input('API_KEY（你自己的）', key='api_key', type='password', placeholder='sk-... / ms-...')
     if not st.session_state.api_key:
-        st.caption('没填 API_KEY：可以在这里填，或者部署时写进 Secrets。')
-    st.session_state.model_name = st.text_input('MODEL_NAME', placeholder='请填写模型名称', value=st.session_state.model_name)
+        st.caption('⚠️ 没填 Key：三个功能都点不动。Key 只存在当前浏览器会话，不上传、不落盘。')
+    st.text_input('MODEL_NAME', key='model_name', placeholder='模型名')
     st.divider()
     # 下拉选择框
     st.session_state.persona = st.selectbox('选择人设', options=PERSONA_KEYS, index=PERSONA_KEYS.index(st.session_state.persona))
@@ -95,13 +116,16 @@ model_name = st.session_state.model_name
 if (bu := st.session_state.base_url) and (ak := st.session_state.api_key):
     client = create_client(base_url=bu, api_key=ak)
 else:
-    client = default_client
+    # 没有 Key 就不建客户端：页面只做提示，不偷偷用站长的额度
+    client = None
 
 # ----------------------------------------------------------------
 # 页面主体
 # ----------------------------------------------------------------
 st.header('🤖 智能聊天机器人')
 st.caption('大模型API与提示词工程')
+if client is None:
+    st.info('👈 先展开左侧「控制面板」（左上角 »），选服务商、贴上 **你自己的 API Key**。这个应用不提供公共额度。')
 # 选项卡
 tabs = st.tabs(['💬智能聊天', '🎯意图识别', '📋工单结构化'], on_change='rerun', key='tab')
 
@@ -124,11 +148,12 @@ with tabs[0]: # 智能聊天
                         st.markdown(rc)
                 st.markdown(ai_msg['content'])
         # 输入聊天问题
-        if st.session_state.tab == '💬智能聊天':
+        message = ''
+        if client is None:
+            st.caption('（填上 API Key 后这里才会出现输入框）')
+        elif st.session_state.tab == '💬智能聊天':
             with st.bottom:
                 message = st.chat_input(placeholder='请输入您的问题，回车发送...')
-        else:
-            message = ''
     if message: # 有输入问题，则接入大语言模型进行解答
         # 将当前用户提问消息添加到历史记录中
         st.session_state.history.append({'role': 'user', 'content': message})
@@ -188,7 +213,7 @@ with tabs[1]: # 意图识别
     question = st.text_area('用户提问', value='我上周买的东西什么时候发货？', height=80)
     cols = st.columns(2) # 分两列
     with cols[0]: # 左边列
-        if st.button('意图识别', type='primary'):
+        if st.button('意图识别', type='primary', disabled=client is None):
             try:
                 msgs = build_intent_messages(question)
                 result = completion(
@@ -216,7 +241,7 @@ with tabs[2]: # 工单结构化处理
     with cols[0]: # 左边列
         st.subheader('工单抽取')
         txt = st.text_area('自然语言工单', value='下午3点在会议室2319开会，参加人员有: 小明，小红，小刚，老王，老李', height=80)
-        if st.button('解析', key='btn_ticket'):
+        if st.button('解析', key='btn_ticket', disabled=client is None):
             try:
                 sys_message = {
                     'role': 'system',
@@ -246,7 +271,7 @@ with tabs[2]: # 工单结构化处理
     with cols[1]: # 右边列
         st.subheader('报销单')
         txt = st.text_area('报销文本: ', value='文本：餐费 120，打车 30，住宿 350，合计多少？', height=80)
-        if st.button('解析', key='btn_cot'):
+        if st.button('解析', key='btn_cot', disabled=client is None):
             try:
                 sys_message = {
                     'role': 'system',
