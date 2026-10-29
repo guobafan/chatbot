@@ -1,0 +1,13 @@
+# 虚拟环境 / IDE
+.venv/
+.idea/
+__pycache__/
+*.py[cod]
+
+# 密钥：绝对不要提交
+.env
+.streamlit/secrets.toml
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
