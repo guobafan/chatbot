@@ -1,21 +1,10 @@
 
-import os
-
 import streamlit as st
 from llm import completion, stream, create_client
 from adapter import StreamlitAdapter
 from prompts import PERSONA, build_intent_messages, INTENT_DEMOS
 from truncation import TRUNC_OPTIONS, build_messages
 from schema import parse_json, Ticket
-
-
-def _secret(name: str, default: str = '') -> str:
-    """读配置：云端 Secrets 优先，其次本地 .env / 环境变量，最后用默认值。"""
-    try:
-        value = st.secrets.get(name, '')
-    except Exception:  # 本地没有 .streamlit/secrets.toml 时读取会报错
-        value = ''
-    return str(value) or os.getenv(name, '') or default
 
 
 # system系统角色（人设）
@@ -25,8 +14,16 @@ TRUNC_KEYS = list(TRUNC_OPTIONS.keys())
 # 不同意图识别后显示的颜色
 INTENT_COLORS = {'order': 'green', 'return': 'red', 'complain': 'blue'}
 
+# 默认服务商：DeepSeek 官方（想用别的自己点）
+DEFAULT_PROVIDER = 'DeepSeek 官方'
+
 # 常用服务商：选一个会自动填好 BASE_URL 和模型名，访客只需要贴自己的 Key
 PROVIDERS = {
+    'DeepSeek 官方': (
+        'https://api.deepseek.com',
+        'deepseek-flash',
+        '官方现役：deepseek-flash（便宜）、deepseek-v4-pro（更强，约 4 倍价）',
+    ),
     '魔搭 ModelScope（每天 2000 次免费）': (
         'https://api-inference.modelscope.cn/v1',
         'deepseek-ai/DeepSeek-V4-Pro',
@@ -36,11 +33,6 @@ PROVIDERS = {
         'https://dashscope.aliyuncs.com/compatible-mode/v1',
         'deepseek-v4-flash-0731',
         '百炼的模型名以控制台「模型广场」里的为准',
-    ),
-    'DeepSeek 官方': (
-        'https://api.deepseek.com',
-        'deepseek-flash',
-        '官方现役：deepseek-flash（便宜）、deepseek-v4-pro（更强，约 4 倍价）',
     ),
     '自定义': ('', '', '自己填 BASE_URL 和模型名'),
 }
@@ -66,11 +58,11 @@ def init_state():
         'keep': 10, # 窗口大小轮数
         'budget': 1024, # token预算阈值上限
         'tab': '💬智能聊天',
-        'provider': list(PROVIDERS)[0],
-        'base_url': _secret('BASE_URL', PROVIDERS[list(PROVIDERS)[0]][0]),
+        'provider': DEFAULT_PROVIDER,
+        'base_url': PROVIDERS[DEFAULT_PROVIDER][0],
         # Key 永远从空开始：谁用谁填自己的，站点不提供公共额度
         'api_key': '',
-        'model_name': _secret('MODEL_NAME', PROVIDERS[list(PROVIDERS)[0]][1]),
+        'model_name': PROVIDERS[DEFAULT_PROVIDER][1],
     }
     # 将各状态数据的初始值保存到 st.session_state 中。
     # session_state 可在一次会话的多次 rerun 情况下共享状态数据
