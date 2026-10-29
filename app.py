@@ -27,16 +27,28 @@ INTENT_COLORS = {'order': 'green', 'return': 'red', 'complain': 'blue'}
 
 # 常用服务商：选一个会自动填好 BASE_URL 和模型名，访客只需要贴自己的 Key
 PROVIDERS = {
-    '魔搭 ModelScope（每天 2000 次免费）': ('https://api-inference.modelscope.cn/v1', 'deepseek-ai/DeepSeek-V4-Pro'),
-    '阿里百炼 DashScope': ('https://dashscope.aliyuncs.com/compatible-mode/v1', 'deepseek-v4-flash-0731'),
-    'DeepSeek 官方': ('https://api.deepseek.com/v1', 'deepseek-chat'),
-    '自定义': ('', ''),
+    '魔搭 ModelScope（每天 2000 次免费）': (
+        'https://api-inference.modelscope.cn/v1',
+        'deepseek-ai/DeepSeek-V4-Pro',
+        '魔搭上还有 deepseek-ai/DeepSeek-R1、Qwen/Qwen3-235B-A22B-Instruct',
+    ),
+    '阿里百炼 DashScope': (
+        'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'deepseek-v4-flash-0731',
+        '百炼的模型名以控制台「模型广场」里的为准',
+    ),
+    'DeepSeek 官方': (
+        'https://api.deepseek.com',
+        'deepseek-flash',
+        '官方现役：deepseek-flash（便宜）、deepseek-v4-pro（更强，约 4 倍价）',
+    ),
+    '自定义': ('', '', '自己填 BASE_URL 和模型名'),
 }
 
 
 def apply_provider():
-    """切换服务商时，把 BASE_URL 和模型名一起换掉（Key 不自动清空）。"""
-    base_url, model_name = PROVIDERS[st.session_state.provider]
+    """切换服务商时，把 BASE_URL 和默认模型名一起换掉（Key 和手改过的模型名会被覆盖）。"""
+    base_url, model_name, _ = PROVIDERS[st.session_state.provider]
     st.session_state.base_url = base_url
     st.session_state.model_name = model_name
 
@@ -82,7 +94,7 @@ with st.sidebar:
         options=list(PROVIDERS),
         key='provider',
         on_change=apply_provider,
-        help='选服务商会自动填 BASE_URL 和模型名；要手动改就选「自定义」',
+        help='选服务商会自动填好 BASE_URL 和默认模型名；模型名随时能手改，BASE_URL 要手改就选「自定义」',
     )
     is_custom = st.session_state.provider == '自定义'
     st.text_input('BASE_URL', key='base_url', placeholder='https://xxx/v1', disabled=not is_custom)
@@ -90,7 +102,8 @@ with st.sidebar:
     st.caption('Key 要和上面的服务商对应：魔搭的以 `ms-` 开头，DeepSeek 的以 `sk-` 开头。')
     if not st.session_state.api_key:
         st.caption('⚠️ 没填 Key：三个功能都点不动。Key 只存在当前浏览器会话，不上传、不落盘。')
-    st.text_input('MODEL_NAME', key='model_name', placeholder='模型名', disabled=not is_custom)
+    st.text_input('MODEL_NAME', key='model_name', placeholder='模型名，可以手改')
+    st.caption(PROVIDERS[st.session_state.provider][2])
     st.divider()
     # 下拉选择框
     st.session_state.persona = st.selectbox('选择人设', options=PERSONA_KEYS, index=PERSONA_KEYS.index(st.session_state.persona))
